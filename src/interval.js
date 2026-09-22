@@ -370,13 +370,14 @@ export default class Interval {
   /**
    * Split this Interval into smaller Intervals, each of the specified length.
    * Left over time is grouped into a smaller interval
-   * @param {Duration|Object|number} duration - The length of each resulting interval.
+   * @param {Duration|Object|number} duration - The positive length of each resulting interval.
    * @return {Array}
    */
   splitBy(duration) {
-    const dur = Duration.fromDurationLike(duration);
+    const dur = Duration.fromDurationLike(duration),
+      durMillis = dur.as("milliseconds");
 
-    if (!this.isValid || !dur.isValid || dur.as("milliseconds") === 0) {
+    if (!this.isValid || !dur.isValid || !Number.isFinite(durMillis) || durMillis <= 0) {
       return [];
     }
 
@@ -388,6 +389,9 @@ export default class Interval {
     while (s < this.e) {
       const added = this.start.plus(dur.mapUnits((x) => x * idx));
       next = +added > +this.e ? this.e : added;
+      if (!added.isValid || next <= s) {
+        break;
+      }
       results.push(Interval.fromDateTimes(s, next));
       s = next;
       idx += 1;
@@ -398,12 +402,23 @@ export default class Interval {
 
   /**
    * Split this Interval into the specified number of smaller intervals.
-   * @param {number} numberOfParts - The number of Intervals to divide the Interval into.
+   * @param {number} numberOfParts - The positive number of Intervals to divide the Interval into.
    * @return {Array}
    */
   divideEqually(numberOfParts) {
-    if (!this.isValid) return [];
-    return this.splitBy(this.length() / numberOfParts).slice(0, numberOfParts);
+    if (
+      !this.isValid ||
+      typeof numberOfParts !== "number" ||
+      !Number.isFinite(numberOfParts) ||
+      !Number.isInteger(numberOfParts) ||
+      numberOfParts <= 0
+    ) {
+      return [];
+    }
+
+    const duration = this.length() / numberOfParts;
+    if (!Number.isFinite(duration) || duration <= 0) return [];
+    return this.splitBy(duration).slice(0, numberOfParts);
   }
 
   /**

@@ -349,8 +349,45 @@ test("Interval#split by returns [] for invalid durations", () => {
 });
 
 test("Interval#split by returns [] for durations of length 0", () => {
-  const split = todayFrom(8, 3).splitBy(Duration.fromObject({}));
+  const split = todayFrom(8, 13).splitBy(Duration.fromObject({}));
   expect(split).toEqual([]);
+});
+
+test("Interval#splitBy returns [] for negative or non-finite-length durations", () => {
+  const interval = todayFrom(8, 13);
+  expect(interval.splitBy({ hours: -1 })).toEqual([]);
+  expect(interval.splitBy(-1)).toEqual([]);
+  expect(() => interval.splitBy(Number.NaN)).toThrow();
+  expect(() => interval.splitBy(Number.POSITIVE_INFINITY)).toThrow();
+});
+
+test("Interval#splitBy advances through mixed calendar units and includes the remainder", () => {
+  const start = DateTime.fromISO("2024-01-01T00:00:00Z", { setZone: true });
+  const end = DateTime.fromISO("2024-04-02T00:00:00Z", { setZone: true });
+  const interval = Interval.fromDateTimes(start, end);
+  const duration = Duration.fromObject({ months: 1, days: -1, hours: 2 });
+  const parts = interval.splitBy(duration);
+
+  expect(parts.length).toBe(4);
+  for (let i = 1; i < parts.length; i++) {
+    expect(parts[i].start.equals(parts[i - 1].end)).toBeTruthy();
+    expect(parts[i].start > parts[i - 1].start).toBeTruthy();
+  }
+  expect(parts[parts.length - 1].end.equals(end)).toBeTruthy();
+});
+
+test("Interval#splitBy preserves calendar-day stepping across DST", () => {
+  const zone = "America/New_York";
+  const start = DateTime.fromISO("2024-03-09T00:00:00", { zone });
+  const end = DateTime.fromISO("2024-03-12T00:00:00", { zone });
+  const parts = Interval.fromDateTimes(start, end).splitBy({ days: 1 });
+
+  expect(parts.map((part) => part.length())).toEqual([86400000, 82800000, 86400000]);
+  expect(parts.map((part) => part.start.toFormat("yyyy-MM-dd HH:mm"))).toEqual([
+    "2024-03-09 00:00",
+    "2024-03-10 00:00",
+    "2024-03-11 00:00",
+  ]);
 });
 
 test("Interval#split by works across varying length months", () => {
@@ -400,6 +437,13 @@ test("Interval#divideEqually always gives you the right number of parts", () => 
   const int = Interval.after(Helpers.atHour(9), { minutes: 7 }),
     split = int.divideEqually(17);
   expect(split.length).toBe(17);
+});
+
+test("Interval#divideEqually returns [] for invalid numbers of parts", () => {
+  const interval = todayFrom(8, 13);
+  for (const numberOfParts of [0, -1, 1.5, Number.NaN, Infinity, -Infinity]) {
+    expect(interval.divideEqually(numberOfParts)).toEqual([]);
+  }
 });
 
 test("Interval#divideEqually returns [] for invalid intervals", () => {
